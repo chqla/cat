@@ -45,10 +45,6 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
       LogEnabled {
 	public static final String ID = "local";
 
-	private File m_baseDir;
-
-	private ConcurrentHashMap<String, LocalMessageBucket> m_buckets = new ConcurrentHashMap<String, LocalMessageBucket>();
-
 	@Inject
 	private ServerConfigManager m_configManager;
 
@@ -61,15 +57,17 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 	@Inject
 	private HdfsUploader m_logviewUploader;
 
+	private ConcurrentHashMap<String, LocalMessageBucket> m_buckets = new ConcurrentHashMap<String, LocalMessageBucket>();
+
+	private File m_baseDir;
+
 	private String m_localIp = NetworkInterfaceManager.INSTANCE.getLocalHostAddress();
 
-	private Logger m_logger;
-
-	private long m_error;
+	protected Logger m_logger;
 
 	private long m_total;
 
-	private int m_gzipThreads = 20;
+	private int m_gzipThreads = 36;
 
 	private int m_gzipMessageSize = 5000;
 
@@ -80,7 +78,7 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 	private ConcurrentHashMap<Integer, LinkedBlockingQueue<MessageItem>> m_messageQueues = new ConcurrentHashMap<Integer, LinkedBlockingQueue<MessageItem>>();
 
 	public void archive(long startTime) {
-		String path = m_pathBuilder.getPath(new Date(startTime), "");
+		String path = m_pathBuilder.getLogviewPath(new Date(startTime), "");
 		List<String> keys = new ArrayList<String>();
 
 		for (String key : m_buckets.keySet()) {
@@ -115,7 +113,7 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 		Threads.forGroup("cat").start(new LogviewUploader(this, m_buckets, m_logviewUploader, m_configManager));
 
 		if (m_configManager.isLocalMode()) {
-			m_gzipThreads = 1;
+			m_gzipThreads = 2;
 		}
 
 		for (int i = 0; i < m_gzipThreads; i++) {
@@ -135,7 +133,7 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 
 		try {
 			MessageId id = MessageId.parse(messageId);
-			final String path = m_pathBuilder.getPath(new Date(id.getTimestamp()), "");
+			final String path = m_pathBuilder.getLogviewPath(new Date(id.getTimestamp()), "");
 			final File dir = new File(m_baseDir, path);
 			final String key = id.getDomain() + '-' + id.getIpAddress();
 			final List<String> paths = new ArrayList<String>();
@@ -212,21 +210,12 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 	}
 
 	private void logStorageState(final MessageTree tree) {
-		int size = ((DefaultMessageTree) tree).getBuffer().readableBytes();
 		String domain = tree.getDomain();
+		int size = ((DefaultMessageTree) tree).getBuffer().readableBytes();
 
 		m_serverStateManager.addMessageSize(domain, size);
-		if (m_total % (CatConstants.SUCCESS_COUNT) == 0) {
+		if ((++m_total) % CatConstants.SUCCESS_COUNT == 0) {
 			m_serverStateManager.addMessageDump(CatConstants.SUCCESS_COUNT);
-
-			Message message = tree.getMessage();
-
-			if (message instanceof Transaction) {
-				long delay = System.currentTimeMillis() - tree.getMessage().getTimestamp()
-				      - ((Transaction) message).getDurationInMillis();
-
-				m_serverStateManager.addProcessDelay(delay);
-			}
 		}
 	}
 
@@ -244,29 +233,24 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 
 	@Override
 	public void storeMessage(final MessageTree tree, final MessageId id) {
-		m_total++;
 		boolean errorFlag = true;
-		int index = (int) (m_total % m_gzipThreads);
-		MessageItem messageItem = new MessageItem(tree, id);
-		int retryTime = 0;
+		int hash = Math.abs((id.getDomain() + '-' + id.getIpAddress()).hashCode());
+		int index = (int) (hash % m_gzipThreads);
+		MessageItem item = new MessageItem(tree, id);
+		LinkedBlockingQueue<MessageItem> queue = m_messageQueues.get(index % (m_gzipThreads - 1));
+		boolean result = queue.offer(item);
 
-		while (retryTime < m_gzipThreads) {
-			LinkedBlockingQueue<MessageItem> queue = m_messageQueues.get((index + retryTime) % m_gzipThreads);
-			boolean result = queue.offer(messageItem);
+		if (result) {
+			errorFlag = false;
+		} else {
+			LinkedBlockingQueue<MessageItem> last = m_messageQueues.get(m_gzipThreads - 1);
 
-			if (result) {
+			if (last.offer(item)) {
 				errorFlag = false;
-				break;
 			}
-			retryTime++;
 		}
 
 		if (errorFlag) {
-			m_error++;
-			if (m_error % (CatConstants.ERROR_COUNT * 10) == 0) {
-				m_logger.error("Error when offer message tree to gzip queue! overflow :" + m_error + ". Gzip thread :"
-				      + index);
-			}
 			m_serverStateManager.addMessageDumpLoss(1);
 		}
 		logStorageState(tree);
@@ -294,7 +278,7 @@ public class LocalMessageBucketManager extends ContainerHolder implements Messag
 			try {
 				MessageId id = item.getMessageId();
 				String name = id.getDomain() + '-' + id.getIpAddress() + '-' + m_localIp;
-				String path = m_pathBuilder.getPath(new Date(id.getTimestamp()), name);
+				String path = m_pathBuilder.getLogviewPath(new Date(id.getTimestamp()), name);
 				LocalMessageBucket bucket = m_buckets.get(path);
 
 				if (bucket == null) {

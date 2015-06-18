@@ -1,5 +1,6 @@
 package com.dianping.cat.consumer.transaction;
 
+import com.dianping.cat.consumer.config.AllReportConfigManager;
 import com.dianping.cat.consumer.transaction.model.entity.Machine;
 import com.dianping.cat.consumer.transaction.model.entity.TransactionName;
 import com.dianping.cat.consumer.transaction.model.entity.TransactionReport;
@@ -14,10 +15,13 @@ public class TransactionReportTypeAggregator extends BaseVisitor {
 
 	private String m_currentType;
 
-	public TransactionReportTypeAggregator(TransactionReport report) {
+	private AllReportConfigManager m_configManager;
+
+	public TransactionReportTypeAggregator(TransactionReport report, AllReportConfigManager configManager) {
 		m_report = report;
+		m_configManager = configManager;
 	}
-	
+
 	private void mergeName(TransactionName old, TransactionName other) {
 		long totalCountSum = old.getTotalCount() + other.getTotalCount();
 
@@ -27,7 +31,6 @@ public class TransactionReportTypeAggregator extends BaseVisitor {
 		if (other.getMin() < old.getMin()) {
 			old.setMin(other.getMin());
 		}
-
 		if (other.getMax() > old.getMax()) {
 			old.setMax(other.getMax());
 		}
@@ -41,16 +44,13 @@ public class TransactionReportTypeAggregator extends BaseVisitor {
 
 			old.setLine95Value(line95Values / totalCountSum);
 		}
-
 		if (old.getTotalCount() > 0) {
 			old.setFailPercent(old.getFailCount() * 100.0 / old.getTotalCount());
 			old.setAvg(old.getSum() / old.getTotalCount());
 		}
-
 		if (old.getSuccessMessageUrl() == null) {
 			old.setSuccessMessageUrl(other.getSuccessMessageUrl());
 		}
-
 		if (old.getFailMessageUrl() == null) {
 			old.setFailMessageUrl(other.getFailMessageUrl());
 		}
@@ -65,42 +65,46 @@ public class TransactionReportTypeAggregator extends BaseVisitor {
 		if (other.getMin() < old.getMin()) {
 			old.setMin(other.getMin());
 		}
-
 		if (other.getMax() > old.getMax()) {
 			old.setMax(other.getMax());
 		}
-
 		old.setSum(old.getSum() + other.getSum());
 		old.setSum2(old.getSum2() + other.getSum2());
 
 		if (totalCountSum > 0) {
 			double line95Values = old.getLine95Value() * old.getTotalCount() + other.getLine95Value()
 			      * other.getTotalCount();
-
 			old.setLine95Value(line95Values / totalCountSum);
 		}
-
 		if (old.getTotalCount() > 0) {
 			old.setFailPercent(old.getFailCount() * 100.0 / old.getTotalCount());
 			old.setAvg(old.getSum() / old.getTotalCount());
 		}
-
 		if (old.getSuccessMessageUrl() == null) {
 			old.setSuccessMessageUrl(other.getSuccessMessageUrl());
 		}
-
 		if (old.getFailMessageUrl() == null) {
 			old.setFailMessageUrl(other.getFailMessageUrl());
 		}
 	}
 
+	private boolean validateName(String type, String name) {
+		return m_configManager.validate(TransactionAnalyzer.ID, type, name);
+	}
+
+	private boolean validateType(String type) {
+		return m_configManager.validate(TransactionAnalyzer.ID, type);
+	}
+
 	@Override
 	public void visitName(TransactionName name) {
-		Machine machine = m_report.findOrCreateMachine(m_currentDomain);
-		TransactionType curentType = machine.findOrCreateType(m_currentType);
-		TransactionName currentName = curentType.findOrCreateName(name.getId());
-		
-		mergeName(currentName, name);
+		if (validateName(m_currentType, name.getId())) {
+			Machine machine = m_report.findOrCreateMachine(m_currentDomain);
+			TransactionType curentType = machine.findOrCreateType(m_currentType);
+			TransactionName currentName = curentType.findOrCreateName(name.getId());
+
+			mergeName(currentName, name);
+		}
 	}
 
 	@Override
@@ -113,14 +117,15 @@ public class TransactionReportTypeAggregator extends BaseVisitor {
 
 	@Override
 	public void visitType(TransactionType type) {
-		Machine machine = m_report.findOrCreateMachine(m_currentDomain);
 		String typeName = type.getId();
-		TransactionType result = machine.findOrCreateType(typeName);
 
-		m_currentType = typeName;
-		mergeType(result, type);
+		if (validateType(typeName)) {
+			Machine machine = m_report.findOrCreateMachine(m_currentDomain);
+			TransactionType result = machine.findOrCreateType(typeName);
 
-		if (typeName.startsWith("Cache.")) {
+			m_currentType = typeName;
+			mergeType(result, type);
+
 			super.visitType(type);
 		}
 	}

@@ -13,6 +13,7 @@ import org.unidal.tuple.Pair;
 import com.dianping.cat.Cat;
 import com.dianping.cat.Constants;
 import com.dianping.cat.analysis.AbstractMessageAnalyzer;
+import com.dianping.cat.config.server.ServerFilterConfigManager;
 import com.dianping.cat.consumer.transaction.model.entity.Duration;
 import com.dianping.cat.consumer.transaction.model.entity.Range;
 import com.dianping.cat.consumer.transaction.model.entity.Range2;
@@ -33,6 +34,9 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 
 	@Inject(ID)
 	private ReportManager<TransactionReport> m_reportManager;
+
+	@Inject
+	private ServerFilterConfigManager m_serverFilterConfigManager;
 
 	private TransactionStatisticsComputer m_computer = new TransactionStatisticsComputer();
 
@@ -82,15 +86,20 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 	@Override
 	public synchronized void doCheckpoint(boolean atEnd) {
 		if (atEnd && !isLocalMode()) {
-			m_reportManager.storeHourlyReports(getStartTime(), StoragePolicy.FILE_AND_DB);
+			m_reportManager.storeHourlyReports(getStartTime(), StoragePolicy.FILE_AND_DB, m_index);
 		} else {
-			m_reportManager.storeHourlyReports(getStartTime(), StoragePolicy.FILE);
+			m_reportManager.storeHourlyReports(getStartTime(), StoragePolicy.FILE, m_index);
 		}
 	}
 
 	@Override
 	public void enableLogging(Logger logger) {
 		m_logger = logger;
+	}
+
+	@Override
+	public int getAnanlyzerCount() {
+		return 2;
 	}
 
 	public Set<String> getDomains() {
@@ -125,8 +134,13 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 	}
 
 	@Override
+	public ReportManager<TransactionReport> getReportManager() {
+		return m_reportManager;
+	}
+
+	@Override
 	protected void loadReports() {
-		m_reportManager.loadHourlyReports(getStartTime(), StoragePolicy.FILE);
+		m_reportManager.loadHourlyReports(getStartTime(), StoragePolicy.FILE, m_index);
 	}
 
 	@Override
@@ -147,8 +161,15 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 	private void processNameGraph(Transaction t, TransactionName name, int min, double d) {
 		int dk = 1;
 
-		while (dk < d) {
-			dk <<= 1;
+		if (d > 65536) {
+			dk = 65536;
+		} else {
+			if (dk > 256) {
+				dk = 256;
+			}
+			while (dk < d) {
+				dk <<= 1;
+			}
 		}
 
 		Duration duration = name.findOrCreateDuration(dk);
@@ -168,7 +189,7 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 		String type = t.getType();
 		String name = t.getName();
 
-		if (m_serverConfigManager.discardTransaction(type, name)) {
+		if (m_serverFilterConfigManager.discardTransaction(type, name)) {
 			return;
 		} else {
 			Pair<Boolean, Long> pair = checkForTruncatedMessage(tree, t);
@@ -269,4 +290,5 @@ public class TransactionAnalyzer extends AbstractMessageAnalyzer<TransactionRepo
 
 		return report;
 	}
+
 }

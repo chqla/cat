@@ -47,12 +47,30 @@ public class StorageReportUpdater {
 		if (!t.isSuccess()) {
 			operation.incError();
 			segment.incError();
+		} else {
+			// updateSqlInfo(param, d);
 		}
 		if (duration > param.getThreshold()) {
 			operation.incLongCount();
 			segment.incLongCount();
 		}
 	}
+
+	// private void updateSqlInfo(StorageUpdateParam param, Domain d) {
+	// String sqlName = param.getSqlName();
+	//
+	// if (StringUtils.isNotEmpty(sqlName)) {
+	// Sql sql = d.findOrCreateSql(sqlName);
+	// String sqlStatement = sql.getStatement();
+	//
+	// if (StringUtils.isEmpty(sqlStatement)) {
+	// sqlStatement = sqlStatement.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+	//
+	// sql.setStatement(sqlStatement);
+	// }
+	// sql.incCount();
+	// }
+	// }
 
 	public static class StorageUpdateParam {
 
@@ -64,13 +82,16 @@ public class StorageReportUpdater {
 
 		private String m_method;
 
+		private String m_sqlName;
+
+		private String m_sqlStatement;
+
 		private Transaction m_transaction;
 
 		private long m_threshold;
 
-		public StorageUpdateParam setDomain(String domain) {
-			m_domain = domain;
-			return this;
+		public String getDomain() {
+			return m_domain;
 		}
 
 		public String getId() {
@@ -81,12 +102,16 @@ public class StorageReportUpdater {
 			return m_ip;
 		}
 
-		public String getDomain() {
-			return m_domain;
-		}
-
 		public String getMethod() {
 			return m_method;
+		}
+
+		public String getSqlName() {
+			return m_sqlName;
+		}
+
+		public String getSqlStatement() {
+			return m_sqlStatement;
 		}
 
 		public long getThreshold() {
@@ -97,8 +122,8 @@ public class StorageReportUpdater {
 			return m_transaction;
 		}
 
-		public StorageUpdateParam setTransaction(Transaction transaction) {
-			m_transaction = transaction;
+		public StorageUpdateParam setDomain(String domain) {
+			m_domain = domain;
 			return this;
 		}
 
@@ -112,13 +137,28 @@ public class StorageReportUpdater {
 			return this;
 		}
 
+		public StorageUpdateParam setMethod(String method) {
+			m_method = method;
+			return this;
+		}
+
+		public StorageUpdateParam setSqlName(String sqlName) {
+			m_sqlName = sqlName;
+			return this;
+		}
+
+		public StorageUpdateParam setSqlStatement(String sqlStatement) {
+			m_sqlStatement = sqlStatement;
+			return this;
+		}
+
 		public StorageUpdateParam setThreshold(long threshold) {
 			m_threshold = threshold;
 			return this;
 		}
 
-		public StorageUpdateParam setMethod(String method) {
-			m_method = method;
+		public StorageUpdateParam setTransaction(Transaction transaction) {
+			m_transaction = transaction;
 			return this;
 		}
 	}

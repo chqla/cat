@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,15 +11,14 @@ import org.unidal.lookup.ContainerLoader;
 import org.unidal.web.mvc.ViewModel;
 
 import com.dianping.cat.Cat;
-import com.dianping.cat.Constants;
 import com.dianping.cat.config.app.AppConfigManager;
-import com.dianping.cat.configuration.aggreation.model.entity.AggregationRule;
 import com.dianping.cat.configuration.app.entity.Code;
 import com.dianping.cat.configuration.app.entity.Command;
 import com.dianping.cat.configuration.app.entity.ConfigItem;
 import com.dianping.cat.configuration.app.entity.Item;
 import com.dianping.cat.configuration.app.speed.entity.Speed;
-import com.dianping.cat.configuration.url.pattern.entity.PatternItem;
+import com.dianping.cat.configuration.web.js.entity.AggregationRule;
+import com.dianping.cat.configuration.web.url.entity.PatternItem;
 import com.dianping.cat.consumer.company.model.entity.Domain;
 import com.dianping.cat.consumer.company.model.entity.ProductLine;
 import com.dianping.cat.consumer.metric.config.entity.MetricItemConfig;
@@ -53,7 +51,7 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 
 	private PatternItem m_patternItem;
 
-	private Collection<PatternItem> m_patternItems;
+	private Map<Integer, PatternItem> m_patternItems;
 
 	private ExceptionLimit m_exceptionLimit;
 
@@ -131,6 +129,8 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 
 	private Map<Integer, Code> m_codes;
 
+	private Map<Integer, com.dianping.cat.configuration.web.url.entity.Code> m_webCodes;
+
 	private Code m_code;
 
 	private String m_domain;
@@ -186,10 +186,6 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 		}
 	}
 
-	public Map<String, List<Command>> getActivityCommands() {
-		return m_appConfigManager.queryDomain2Commands(true);
-	}
-
 	public AggregationRule getAggregationRule() {
 		return m_aggregationRule;
 	}
@@ -199,7 +195,7 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 	}
 
 	public Map<String, List<Command>> getApiCommands() {
-		return m_appConfigManager.queryDomain2Commands(false);
+		return m_appConfigManager.queryDomain2Commands();
 	}
 
 	public Item getAppItem() {
@@ -272,11 +268,7 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 	}
 
 	public String getDomain2CommandsJson() {
-		Map<String, List<Command>> results = new LinkedHashMap<String, List<Command>>();
-
-		results.put(Constants.ALL, m_appConfigManager.queryCommands());
-		results.putAll(m_appConfigManager.queryDomain2Commands());
-		return new JsonBuilder().toJson(results);
+		return new JsonBuilder().toJson(m_appConfigManager.queryDomain2Commands());
 	}
 
 	public DomainConfig getDomainConfig() {
@@ -325,36 +317,6 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 
 	public List<String> getExceptionList() {
 		return m_exceptionList;
-	}
-
-	public String getGroup2PatternItemJson() {
-		Map<String, List<PatternItem>> maps = new LinkedHashMap<String, List<PatternItem>>();
-
-		for (PatternItem item : m_patternItems) {
-			List<PatternItem> items = maps.get(item.getGroup());
-
-			if (items == null) {
-				items = new ArrayList<PatternItem>();
-				maps.put(item.getGroup(), items);
-			}
-			items.add(item);
-		}
-		return new JsonBuilder().toJson(maps);
-	}
-
-	public Map<String, List<PatternItem>> getGroup2PatternItems() {
-		Map<String, List<PatternItem>> maps = new LinkedHashMap<String, List<PatternItem>>();
-
-		for (PatternItem item : m_patternItems) {
-			List<PatternItem> items = maps.get(item.getGroup());
-
-			if (items == null) {
-				items = new ArrayList<PatternItem>();
-				maps.put(item.getGroup(), items);
-			}
-			items.add(item);
-		}
-		return maps;
 	}
 
 	public com.dianping.cat.home.group.entity.Domain getGroupDomain() {
@@ -409,7 +371,7 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 		return m_patternItem;
 	}
 
-	public Collection<PatternItem> getPatternItems() {
+	public Map<Integer, PatternItem> getPatternItems() {
 		return m_patternItems;
 	}
 
@@ -487,6 +449,14 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 
 	public Map<Integer, Item> getVersions() {
 		return m_versions;
+	}
+
+	public Map<Integer, com.dianping.cat.configuration.web.url.entity.Code> getWebCodes() {
+		return m_webCodes;
+	}
+
+	public String getWebCodesJson() {
+		return new JsonBuilder().toJson(m_webCodes);
 	}
 
 	public void setAggregationRule(AggregationRule aggregationRule) {
@@ -641,7 +611,7 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 		m_patternItem = patternItem;
 	}
 
-	public void setPatternItems(Collection<PatternItem> patternItems) {
+	public void setPatternItems(Map<Integer, PatternItem> patternItems) {
 		m_patternItems = patternItems;
 	}
 
@@ -715,6 +685,10 @@ public class Model extends ViewModel<SystemPage, Action, Context> {
 
 	public void setVersions(Map<Integer, Item> versions) {
 		m_versions = versions;
+	}
+
+	public void setWebCodes(Map<Integer, com.dianping.cat.configuration.web.url.entity.Code> webCodes) {
+		m_webCodes = webCodes;
 	}
 
 	public static class Edge {
